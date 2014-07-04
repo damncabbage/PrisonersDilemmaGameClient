@@ -46,8 +46,10 @@ port = PortNumber 1234
 main :: IO ()
 main = do
     [hostName, strategy] <- getArgs -- TODO: Parse arguments properly
-    handle <- connectTo hostName port
-    (runGame handle (dispatch strategy) Nothing) `catch` disconnected `finally` (hClose handle)
+    bracket (connectTo hostName port)
+            hClose
+            (runGame (dispatch strategy) Nothing)
+    `catch` disconnected
   where
     dispatch strategy = -- TODO: There must be a better way to do this
       case strategy of
@@ -58,11 +60,11 @@ main = do
     disconnected :: IOException -> IO ()
     disconnected ex = putStrLn "Done." -- Protocol: just terminate connection. :(
 
-runGame :: Handle -> (Maybe Response -> Request) -> Maybe Response -> IO ()
-runGame h strategy last = do
+runGame :: (Maybe Response -> Request) -> Maybe Response -> Handle -> IO ()
+runGame strategy last h = do
     request  <- S.hPutStrLn h (encode (strategy last))
     response <- getResponse
-    runGame h strategy (Just response)
+    runGame strategy (Just response) h
   where
     tryDecode bs =
       case (decode bs) of
